@@ -1,9 +1,9 @@
 ## Equipment list:
 
-Raspberry itself - should work really with any.
-1. To work with lights you will need PCA9685 PWM controller connected to your RPi and lights connected to it (through some transistors).
-2. Dallas DS18B20 (in water proof configuration) is used as temperature sensor.
-3. Devices like fans are controlled directly through GPIO pins but with use of some relay shield.
+1. Raspberry itself - should work really with any.
+2. To work with lights you will need PCA9685 PWM controller connected to your RPi and lights connected to it (through some transistors).
+3. Dallas DS18B20 (in water proof configuration) is used as temperature sensor.
+4. Devices like fans are controlled directly through GPIO pins but with use of some relay shield.
 
 ## Installation
 

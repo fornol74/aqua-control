@@ -33,3 +33,5 @@ systemctl start aqua-control
 ```
 
 Your aquarium is now under control.
+
+This is considered under construction. Code is not polished, still many comments in it and test print outs. But it works. Code is greatly inspired by reefpi project: https://reef-pi.github.io/. If you do not know how to use above maybe you should consider reef-pi instead.

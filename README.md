@@ -1,5 +1,14 @@
 # aqua-control
 
+
+
+## Equipment list:
+
+Raspberry itself - should work really with any.
+To work with lights you will need PCA9685 PWM controller connected to your RPi and lights connected to it (through some transistors).
+Dallas DS18B20 (in water proof configuration) is used as temperature sensor.
+Devices like fans are controlled directly through GPIO pins but with use of some relay shield.
+
 ## Installation
 
 Clone repository.

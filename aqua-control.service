@@ -1,0 +1,12 @@
+[Unit]
+Description=Python script to control aquarium
+
+[Service]
+WorkingDirectory=/home/pi/aqua-control/
+ExecStart=/usr/bin/python3 /home/pi/aqua-control/aqua-control.py
+RemainAfterExit=no
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target

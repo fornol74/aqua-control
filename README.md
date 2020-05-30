@@ -5,31 +5,34 @@
 3. Dallas DS18B20 (in water proof configuration) is used as temperature sensor.
 4. Devices like fans are controlled directly through GPIO pins but with use of some relay shield.
 
+Some new features and improvements
+
+5. I use Raspberry's PWM hardware controller for some devices. It supports very high frequencies (tested up to 30 kHz) what results in very smooth operation of controlled fans. All credits go to:
+   https://jumpnowtek.com/rpi/Using-the-Raspberry-Pi-Hardware-PWM-timers.html.
+   I use Python class from the link above with just change file name.
+   Note: only some pins of RPi can be controlled this way.
+6. For lights you can specify number of available control steps (4095 in case of PCA9685). When specifing maximum control limit you can use percentage or absolute values.
+7. Thanks to CherryPy library program creates small web server. At the moment its functionality is limited to .ini file editing.
+8. Some directory structure was created.
+   `aqua-control`folder consist program itself. `system` folder consist service that shall be copied to /etc/systemd/system/ folder of OS.
+9. Some small installation script (`install.sh`) was created.
+
 ## Installation
 
 Clone repository.
 
-Install python dependicies:
+Run:
 
 ```
-pip3 install PCA9685-driver
-pip3 install w1thermsensor
-pip3 install gpiozero
+./install.sh
 ```
 
-Copy service file to systemd folder.
+It will try to install required software and Python libraries. At the end it will enable daemon to run program in the background.
+
+Remember to start it with:
 
 ```
-cp aqua-control.service /etc/systemd/system
-```
-
-Edit config.ini file so it works with your system.
-
-Enable and start service.
-
-```
-systemctl enable aqua-control
-systemctl start aqua-control
+systemctl start aqua_control
 ```
 
 Your aquarium is now under control.

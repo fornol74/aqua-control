@@ -5,34 +5,47 @@ import sys
 import time
 import threading
 import requests
-# from domoticz import Domoticz
+
+# import memcache
+from pymemcache.client import base
 
 # PCA9685 PWM controller
 from pca9685_controller import PCA9685
 
 from temp_controller import Temp
 
+from server_controller import cherrypy, HelloWorld, AquaControlServer
+
 
 # Controll for GPIO on RPi
-# from output_control import Output
 from gpiozero import DigitalOutputDevice as Output
+
+from pwm_controller import PWM
 
 
 class Light(object):
     def __init__(self, name, data):
         self.name = name
         self.data = []
-        self.max = 4095
+        self.max = "100%"
+        self.levels = 0
         for details in data:
             if details[0] == 'type':
                 self.type = details[1]
             if details[0] == 'channel':
                 self.channel = details[1]
+            if details[0] == 'levels':
+                self.levels = int(details[1]) - 1
             if details[0] == 'max':
-                self.max = (int(details[1])/100)*4095
+                if details[1][-1:] == '%':
+                    self.max = (int(details[1][:-1])/100)*self.levels
+                    print(self.max)
+                else:
+                    self.max = int(details[1])
+                    print(self.max)
             if ':' in details[0]:
                 self.data.append(
-                    [(sum(int(x) * 60 ** i for i, x in enumerate(reversed(details[0].split(":"))))), (int(details[1])/100)*4095])
+                    [(sum(int(x) * 60 ** i for i, x in enumerate(reversed(details[0].split(":"))))), (int(details[1])/100)*self.levels])
 
     def set(self, now):
         """
@@ -96,8 +109,21 @@ class Switch(object):
     def set_temp_control(self, control):
         self.temp_controlled = control
 
-    # def temp_control_status(self):
-    #     return bool(self.temp_controlled)
+
+class Pwm(object):
+    def __init__(self, name, data):
+        self.name = name
+        self.data = []
+        self.channel = PWM(0)
+        for details in data:
+            if details[0] == 'output':
+                self.output = details[1]
+            if details[0] == 'type':
+                self.type = details[1]
+            if details[0] == 'period':
+                self.period = details[1]
+            if details[0] == 'duty_cycle':
+                self.duty_cycle = details[1]
 
 
 # Global settings
@@ -105,12 +131,16 @@ lights = []
 outputs = []
 switches = []
 temps = []
+pwms = []
 # domoticz_temp_ready = False
 # domoticz_temp = 0.0
 domoticz_data = []
 domoticz_sever = ""
 domoticz_port = ""
-pwm = PCA9685(0x40, 60)
+pwm_pca_freq = 60
+pwm_pca = PCA9685(0x40, pwm_pca_freq)
+server_host = ""
+server_port = ""
 
 
 def ini_load():
@@ -120,8 +150,23 @@ def ini_load():
 
     global domoticz_sever
     global domoticz_port
+    global server_host
+    global server_port
+    global lights, outputs, switches, temps, domoticz_data, pwms
 
-    config = configparser.ConfigParser(delimiters=('='))
+    result = str(client.get('ini_reload'))
+
+    if result == "b'true'":
+        client.set('ini_reload', 'false')
+        lights = []
+        outputs = []
+        switches = []
+        temps = []
+        pwms = []
+        domoticz_data = []
+        print("Settings reinitialized")
+
+    config = configparser.ConfigParser(delimiters=('='), interpolation=None)
 
     config.read('config.ini')
 
@@ -134,6 +179,14 @@ def ini_load():
 
         if ('type', 'switch') in ini_data:
             switches.append(Switch(sections, ini_data))
+
+        if ('type', 'pwm') in ini_data:
+            pwms.append(Pwm(sections, ini_data))
+
+            for pwm in pwms:
+                pwm.channel.export()
+                pwm.channel.period = int(pwm.period)
+                pwm.channel.duty_cycle = int(pwm.duty_cycle)
 
         if ('type', 'temp') in ini_data:
             temps.append(Temp(sections, ini_data))
@@ -152,8 +205,9 @@ def ini_load():
 
         if ('GPIO_OUTPUT') in sections:
             for data in ini_data:
-                outputs.append(
-                    [data[0].upper(), Output(int(data[1]))])
+                if data[1] != "18":
+                    outputs.append(
+                        [data[0].upper(), Output(int(data[1]))])
 
         if ('DOMOTICZ') in sections:
             for data in ini_data:
@@ -161,6 +215,13 @@ def ini_load():
                     domoticz_sever = data[1]
                 if data[0].upper() == "PORT":
                     domoticz_port = data[1]
+
+        if ('GENERAL') in sections:
+            for data in ini_data:
+                if data[0].upper() == "SERVER_HOST":
+                    server_host = str(data[1])
+                if data[0].upper() == "SERVER_PORT":
+                    server_port = int(data[1])
 
 
 def domoticz_loop():
@@ -177,27 +238,20 @@ def domoticz_loop():
 
     while True:
         print("domoticz loop")
-        # if domoticz_temp_ready == True:
-        #     # domoticz_address = "192.168.1.22"
-        #     # domoticz_port = "8088"
-        #     domoticz_resp = requests.get("http://"+domoticz_sever+":"+domoticz_port +
-        #                                  "/json.htm?type=command&param=udevice&idx=" +
-        #                                  "118"+"&nvalue=0&svalue=" +
-        #                                  str(domoticz_temp))
-        #     domoticz_temp_ready = False
-        #     print("Domoticz temp update")
-        #     print(domoticz_resp.status_code)
         for data in domoticz_data:
             print(data[1])
             print(data[3])
-            if data[1] == "TEMP" and data[3] == True:
-                domoticz_resp = requests.get("http://"+domoticz_sever+":"+domoticz_port +
-                                             "/json.htm?type=command&param=udevice&idx=" +
-                                             str(data[0])+"&nvalue=0&svalue=" +
-                                             str(data[2]))
-                data[3] = False
-                print("Domoticz temp update")
-                print(domoticz_resp.status_code)
+            try:
+                if data[1] == "TEMP" and data[3] == True:
+                    domoticz_resp = requests.get("http://"+domoticz_sever+":"+domoticz_port +
+                                                 "/json.htm?type=command&param=udevice&idx=" +
+                                                 str(data[0])+"&nvalue=0&svalue=" +
+                                                 str(data[2]))
+                    data[3] = False
+                    print("Domoticz temp update")
+                    print(domoticz_resp.status_code)
+            except:
+                pass
         time.sleep(10)
 
 
@@ -247,9 +301,16 @@ def main_loop():
     """
     This procedures just triggers main procedure
     """
+
+    # global ini_reload
     while True:
         time.sleep(0.5)
         main()
+
+        result = str(client.get('ini_reload'))
+
+        if result == "b'true'":
+            ini_load()
 
 
 def main():
@@ -264,7 +325,7 @@ def main():
 
     # control of lights
     for light in lights:
-        pwm.set_pwm(int(light.channel), light.set(now))
+        pwm_pca.set_pwm(int(light.channel), light.set(now))
         print(light.set(now))
 
     # Control of switches - devices connected to GPIO pins
@@ -273,15 +334,40 @@ def main():
         status = switch.status(now)
         # print("switch loop")
         # print(switch.temp_controlled)
-        if switch.temp_controlled != True:
-            if status == "on":
-                [pin.on() for name, pin in outputs if name == switch_name]
-            if status == "off":
-                [pin.off() for name, pin in outputs if name == switch_name]
+        # if switch.temp_controlled != True:
+        if status == "on":
+            print("Status on")
+            for pwm in pwms:
+                if pwm.output == switch_name:
+                    print("test pwm on")
+                    pwm.channel.enable = True
+                else:
+                    print("test gpio on")
+                    [pin.on() for name, pin in outputs if name == switch_name]
+        if status == "off":
+            print("Status off")
+            for pwm in pwms:
+                if pwm.output == switch_name:
+                    print("test off")
+                    pwm.channel.enable = False
+                else:
+                    print("test gpio off")
+                    [pin.off() for name, pin in outputs if name == switch_name]
+
+
+def cherrypy_run(sever_host, server_port):
+    cherrypy.quickstart(AquaControlServer(
+    ), '/', {'global': {'server.socket_host': server_host, 'server.socket_port': server_port}})
 
 
 if __name__ == '__main__':
+    client = base.Client(('127.0.0.1', 11211))
+
     ini_load()
+
+    cherrypy_app_start = threading.Thread(
+        target=cherrypy_run, args=(server_host, server_port, ))
+    cherrypy_app_start.start()
 
     temp_loop = threading.Thread(target=temp_loop)
     temp_loop.start()

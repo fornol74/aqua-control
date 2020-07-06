@@ -29,11 +29,14 @@ class Light(object):
         self.data = []
         self.max = "100%"
         self.levels = 0
+        self.domoticz_id = 0
         for details in data:
             if details[0] == 'type':
                 self.type = details[1]
             if details[0] == 'channel':
                 self.channel = details[1]
+            if details[0] == "domoticz_id":
+                self.domoticz_id = details[1]
             if details[0] == 'levels':
                 self.levels = int(details[1]) - 1
             if details[0] == 'max':
@@ -176,6 +179,18 @@ def ini_load():
 
         if ('type', 'light') in ini_data:
             lights.append(Light(sections, ini_data))
+            for data in ini_data:
+                if data[0].upper() == "DOMOTICZ_ID":
+                    domoticz_id = data[1]
+                    """
+                    Inicjuje listę domoticz_data wartościami:
+                    domoticz_id = numer sensora domoticza na podstawie pliku .ini
+                    druga wartość domoticz type na podstawie grupy .ini
+                    trzecie wartość początkowa wartość temperatury
+                    czwarta wartość czy temperatura została zaktualizowana i można wysłać do domoticza
+                    """
+                    domoticz_data.append(
+                        [domoticz_id, "LIGHT", 0.0, False])
 
         if ('type', 'switch') in ini_data:
             switches.append(Switch(sections, ini_data))
@@ -193,15 +208,15 @@ def ini_load():
             for data in ini_data:
                 if data[0].upper() == "DOMOTICZ_ID":
                     domoticz_id = data[1]
-            """
-            Inicjuje listę domoticz_data wartościami:
-            domoticz_id = numer sensora domoticza na podstawie pliku .ini
-            druga wartość domoticz type na podstawie grupy .ini
-            trzecie wartość początkowa wartość temperatury
-            czwarta wartość czy temperatura została zaktualizowana i można wysłać do domoticza
-            """
-            domoticz_data.append(
-                [domoticz_id, "TEMP", 0.0, False])
+                    """
+                    Inicjuje listę domoticz_data wartościami:
+                    domoticz_id = numer sensora domoticza na podstawie pliku .ini
+                    druga wartość domoticz type na podstawie grupy .ini
+                    trzecie wartość początkowa wartość temperatury
+                    czwarta wartość czy temperatura została zaktualizowana i można wysłać do domoticza
+                    """
+                    domoticz_data.append(
+                        [domoticz_id, "TEMP", 0.0, False])
 
         if ('GPIO_OUTPUT') in sections:
             for data in ini_data:
@@ -243,6 +258,17 @@ def domoticz_loop():
             print(data[3])
             try:
                 if data[1] == "TEMP" and data[3] == True:
+                    domoticz_resp = requests.get("http://"+domoticz_sever+":"+domoticz_port +
+                                                 "/json.htm?type=command&param=udevice&idx=" +
+                                                 str(data[0])+"&nvalue=0&svalue=" +
+                                                 str(data[2]))
+                    data[3] = False
+                    print("Domoticz light update")
+                    print(domoticz_resp.status_code)
+
+                # custom sensor udpate
+                # /json.htm?type=command&param=udevice&idx=IDX&nvalue=0&svalue=VALUE
+                if data[1] == "LIGHT" and data[3] == True:
                     domoticz_resp = requests.get("http://"+domoticz_sever+":"+domoticz_port +
                                                  "/json.htm?type=command&param=udevice&idx=" +
                                                  str(data[0])+"&nvalue=0&svalue=" +
@@ -297,20 +323,20 @@ def temp_loop():
                         #  for switch in switches if switch.name == temp.control]
 
 
-def main_loop():
-    """
-    This procedures just triggers main procedure
-    """
+# def main_loop():
+#     """
+#     This procedures just triggers main procedure
+#     """
 
-    # global ini_reload
-    while True:
-        time.sleep(0.5)
-        main()
+#     # global ini_reload
+#     while True:
+#         time.sleep(0.5)
+#         main()
 
-        result = str(client.get('ini_reload'))
+#         result = str(client.get('ini_reload'))
 
-        if result == "b'true'":
-            ini_load()
+#         if result == "b'true'":
+#             ini_load()
 
 
 def main():
@@ -319,40 +345,62 @@ def main():
     Controls lighs and switches
     """
 
-    now = (sum(int(x) * 60 ** i for i,
-               x in enumerate(reversed(datetime.now().strftime("%H:%M:%S").split(":")))))
-    # now = 50000
+    print("Main loop start")
+
+    try:
+        print("now - main")
+        now = (sum(int(x) * 60 ** i for i,
+                   x in enumerate(reversed(datetime.now().strftime("%H:%M:%S").split(":")))))
+        print(now)
+    except:
+        print("now - exception")
 
     # control of lights
-    for light in lights:
-        pwm_pca.set_pwm(int(light.channel), light.set(now))
-        print(light.set(now))
+    try:
+        print("lights - main")
+        for light in lights:
+            light_value = light.set(now)
+            pwm_pca.set_pwm(int(light.channel), light_value)
+
+            for data in domoticz_data:
+                if data[0] == light.domoticz_id:
+                    data[2] = light_value
+                    data[3] = True
+
+            print(light.set(now))
+    except:
+        print("lights - exception")
 
     # Control of switches - devices connected to GPIO pins
-    for switch in switches:
-        switch_name = switch.name
-        status = switch.status(now)
-        # print("switch loop")
-        # print(switch.temp_controlled)
-        # if switch.temp_controlled != True:
-        if status == "on":
-            print("Status on")
-            for pwm in pwms:
-                if pwm.output == switch_name:
-                    print("test pwm on")
-                    pwm.channel.enable = True
-                else:
-                    print("test gpio on")
-                    [pin.on() for name, pin in outputs if name == switch_name]
-        if status == "off":
-            print("Status off")
-            for pwm in pwms:
-                if pwm.output == switch_name:
-                    print("test off")
-                    pwm.channel.enable = False
-                else:
-                    print("test gpio off")
-                    [pin.off() for name, pin in outputs if name == switch_name]
+    try:
+        print("switches - main")
+        for switch in switches:
+            switch_name = switch.name
+            status = switch.status(now)
+            # print("switch loop")
+            # print(switch.temp_controlled)
+            # if switch.temp_controlled != True:
+            if status == "on":
+                print("Status on")
+                for pwm in pwms:
+                    if pwm.output == switch_name:
+                        print("test pwm on")
+                        pwm.channel.enable = True
+                    else:
+                        print("test gpio on")
+                        [pin.on() for name, pin in outputs if name == switch_name]
+            if status == "off":
+                print("Status off")
+                for pwm in pwms:
+                    if pwm.output == switch_name:
+                        print("test off")
+                        pwm.channel.enable = False
+                    else:
+                        print("test gpio off")
+                        [pin.off()
+                         for name, pin in outputs if name == switch_name]
+    except:
+        print("switches - exception")
 
 
 def cherrypy_run(sever_host, server_port):
@@ -372,11 +420,21 @@ if __name__ == '__main__':
     temp_loop = threading.Thread(target=temp_loop)
     temp_loop.start()
 
-    main_loop_thread = threading.Thread(target=main_loop)
-    main_loop_thread.start()
+    # main_loop_thread = threading.Thread(target=main_loop)
+    # main_loop_thread.start()
 
     domoticz_loop_thread = threading.Thread(target=domoticz_loop)
     domoticz_loop_thread.start()
+
+    while True:
+        result = str(client.get('ini_reload'))
+
+        if result == "b'true'":
+            ini_load()
+
+        main()
+
+        time.sleep(0.5)
 
     # while True:
     #     # # for windows

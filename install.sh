@@ -19,6 +19,7 @@ pip3 install PCA9685-driver
 pip3 install w1thermsensor
 pip3 install gpiozero
 pip3 install pymemcache
+pip3 install cherrypy
 
 
 rm -rf /usr/local/bin/aqua-control

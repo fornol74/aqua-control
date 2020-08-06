@@ -2,6 +2,7 @@
 
 apt install memcached
 apt install python3-pip
+apt install build-essential libi2c-dev i2c-tools python-dev libffi-dev
 
 pip3 install PCA9685-driver
 pip3 install w1thermsensor

@@ -1,6 +1,7 @@
 #!/bin/bash
 
 apt install memcached
+apt install python3-pip
 
 pip3 install PCA9685-driver
 pip3 install w1thermsensor

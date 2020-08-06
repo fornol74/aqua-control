@@ -27,3 +27,5 @@ cp -r ./aqua-control /usr/local/bin
 cp ./system/aqua_control.service /etc/systemd/system
 
 systemctl enable aqua_control.service
+
+echo "Please reboot your system"

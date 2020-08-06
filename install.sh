@@ -8,6 +8,7 @@ apt install build-essential libi2c-dev i2c-tools python-dev libffi-dev
 
 #enable i2c
 sed -i 's/#dtparam=i2c_arm=on/dtparam=i2c_arm=on/' /boot/config.txt
+grep -q '^i2c-dev' /etc/modules || echo 'i2c-dev' >> /etc/modules
 
 #enable 1-wire
 grep -q '^dtoverlay=w1-gpio' /boot/config.txt || echo 'dtoverlay=w1-gpio' >> /boot/config.txt

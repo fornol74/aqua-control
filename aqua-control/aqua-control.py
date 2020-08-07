@@ -303,7 +303,7 @@ def temp_loop():
                         data[2] = temperature
                         data[3] = True
                 print(temperature)
-                if temperature + temp.hysteresis > temp.max:
+                if temperature > temp.max + temp.hysteresis:
                     if temp.control != "None":
                         # [pin.on()
                         #  for name, pin in outputs if name == temp.control]
@@ -312,7 +312,7 @@ def temp_loop():
                         # print("temp loop")
                         # [print(switch.temp_controlled)
                         #  for switch in switches if switch.name == temp.control]
-                if temperature - temp.hysteresis < temp.max:
+                if temperature < temp.max:
                     if temp.control != "None":
                         # [pin.off()
                         #  for name, pin in outputs if name == temp.control]
@@ -382,23 +382,28 @@ def main():
             # if switch.temp_controlled != True:
             if status == "on":
                 print("Status on")
-                for pwm in pwms:
-                    if pwm.output == switch_name:
-                        print("test pwm on")
-                        pwm.channel.enable = True
-                    else:
-                        print("test gpio on")
-                        [pin.on() for name, pin in outputs if name == switch_name]
+                if not pwms:
+                    [pin.on() for name, pin in outputs if name == switch_name]
+                else:
+                    for pwm in pwms:
+                        if pwm.output == switch_name:
+                            print("test pwm on")
+                            pwm.channel.enable = True
+                        else:
+                            print("test gpio on")
+                            [pin.on() for name, pin in outputs if name == switch_name]
             if status == "off":
                 print("Status off")
-                for pwm in pwms:
-                    if pwm.output == switch_name:
-                        print("test off")
-                        pwm.channel.enable = False
-                    else:
-                        print("test gpio off")
-                        [pin.off()
-                         for name, pin in outputs if name == switch_name]
+                if not pwms:
+                    [pin.off() for name, pin in outputs if name == switch_name]
+                else: 
+                    for pwm in pwms:
+                        if pwm.output == switch_name:
+                            print("test off")
+                            pwm.channel.enable = False
+                        else:
+                            print("test gpio off")
+                            [pin.off() for name, pin in outputs if name == switch_name]
     except:
         print("switches - exception")
 

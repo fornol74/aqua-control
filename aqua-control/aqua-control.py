@@ -140,8 +140,11 @@ pwms = []
 domoticz_data = []
 domoticz_sever = ""
 domoticz_port = ""
-pwm_pca_freq = 60
-pwm_pca = PCA9685(0x40, pwm_pca_freq)
+try:
+    pwm_pca_freq = 60
+    pwm_pca = PCA9685(0x40, pwm_pca_freq)
+except:
+    print("Initialization of PCA9685 module skipped. Most probably module not present!")
 server_host = ""
 server_port = ""
 
